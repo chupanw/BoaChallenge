@@ -1,0 +1,20 @@
+# On average, how many files are changed to fix a bug?
+
+p: Project = input;
+# total number of changed files
+fileCount: output sum of int;
+# total number of revisions
+revCount: output sum of int;
+
+# other variables
+isfixing := false;
+
+visit(p, visitor{
+	before r: Revision -> {
+		isfixing = isfixingrevision(r.log);
+		if (isfixing) {
+			fileCount << len(r.files);
+			revCount << 1;
+		}
+	}
+});

@@ -1,0 +1,21 @@
+# Count how many projects are there in the dataset
+
+p: Project = input;
+projectCount: output sum of int;
+revCount: output sum of int;
+bugFixingRevCount: output sum of int;
+
+isFixing := false;
+
+visit(p, visitor{
+	before pn: Project -> {
+		projectCount << 1;
+	}
+	before r: Revision -> {
+		revCount << 1;
+		isFixing = isfixingrevision(r.log);
+		if (isFixing) {
+			bugFixingRevCount << 1;
+		}
+	}
+});

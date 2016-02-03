@@ -1,0 +1,130 @@
+# For each kind of statement, how many bug fixing revisions add/delete statements of the same kins?
+
+p: Project = input;
+addSum: output sum[string] of int;
+delSum: output sum[string] of int;
+unchangedSum: output sum[string] of int;
+revCount: output sum of int;
+
+isFixing := false;
+files: map[string] of ChangedFile;
+count: array of int;
+
+plusVisitor := visitor {
+	before s: Statement -> {
+		switch(s.kind) {
+			case StatementKind.ASSERT: count[0]++; break;
+			case StatementKind.BREAK: count[1]++; break;
+			case StatementKind.CASE: count[2]++; break;
+			case StatementKind.CATCH: count[3]++; break;
+			case StatementKind.CONTINUE: count[4]++; break;
+			case StatementKind.DO: count[5]++; break;
+			case StatementKind.EMPTY: count[6]++; break;
+			case StatementKind.EXPRESSION: count[7]++; break;
+			case StatementKind.FOR: count[8]++; break;
+			case StatementKind.IF: count[9]++; break;
+			case StatementKind.LABEL: count[10]++; break;
+			case StatementKind.OTHER: count[11]++; break;
+			case StatementKind.RETURN: count[12]++; break;
+			case StatementKind.SWITCH: count[13]++; break;
+			case StatementKind.SYNCHRONIZED: count[14]++; break;
+			case StatementKind.THROW: count[15]++; break;
+			case StatementKind.TRY: count[16]++; break;
+			case StatementKind.TYPEDECL: count[17]++; break;
+			case StatementKind.WHILE: count[18]++; break;
+			default: break;
+		}
+	}
+};
+
+minusVisitor := visitor {
+	before s: Statement -> {
+		switch(s.kind) {
+			case StatementKind.ASSERT: count[0]--; break;
+			case StatementKind.BREAK: count[1]--; break;
+			case StatementKind.CASE: count[2]--; break;
+			case StatementKind.CATCH: count[3]--; break;
+			case StatementKind.CONTINUE: count[4]--; break;
+			case StatementKind.DO: count[5]--; break;
+			case StatementKind.EMPTY: count[6]--; break;
+			case StatementKind.EXPRESSION: count[7]--; break;
+			case StatementKind.FOR: count[8]--; break;
+			case StatementKind.IF: count[9]--; break;
+			case StatementKind.LABEL: count[10]--; break;
+			case StatementKind.OTHER: count[11]--; break;
+			case StatementKind.RETURN: count[12]--; break;
+			case StatementKind.SWITCH: count[13]--; break;
+			case StatementKind.SYNCHRONIZED: count[14]--; break;
+			case StatementKind.THROW: count[15]--; break;
+			case StatementKind.TRY: count[16]--; break;
+			case StatementKind.TYPEDECL: count[17]--; break;
+			case StatementKind.WHILE: count[18]--; break;
+			default: break;
+		}
+	}
+};
+
+aggregateOne := function(i: int, s: string) {
+	if (count[i] > 0){ addSum[s] << 1;}
+	else if (count[i] == 0){ unchangedSum[s] << 1;}
+	else{ delSum[s] << 1;}
+};
+
+aggregateAll := function() {
+	aggregateOne(0, "assert");
+	aggregateOne(1, "break");
+	aggregateOne(2, "case");
+	aggregateOne(3, "catch");
+	aggregateOne(4, "continue");
+	aggregateOne(5, "do");
+	aggregateOne(6, "empty");
+	aggregateOne(7, "expression");
+	aggregateOne(8, "for");
+	aggregateOne(9, "if");
+	aggregateOne(10, "label");
+	aggregateOne(11, "other");
+	aggregateOne(12, "return");
+	aggregateOne(13, "switch");
+	aggregateOne(14, "synchronized");
+	aggregateOne(15, "throw");
+	aggregateOne(16, "try");
+	aggregateOne(17, "typedecl");
+	aggregateOne(18, "while");
+};
+
+visit(p, visitor{
+	before r: Revision -> {
+		isFixing = isfixingrevision(r.log);
+		if (isFixing) {
+			revCount << 1;
+		}
+		count = new(count, 19, 0);
+	}
+	after r: Revision -> {
+		if (isFixing) {
+			aggregateAll();
+		}
+	}
+	before f: ChangedFile -> {
+		if (isFixing) {
+			if (f.change == ChangeKind.ADDED) {
+				visit(getast(f), plusVisitor);
+			}
+			else if (f.change == ChangeKind.MODIFIED && haskey(files, f.name)) {
+				visit(getast(files[f.name]), minusVisitor);
+				visit(getast(f), plusVisitor);
+			}
+			else {
+				visit(getast(f), minusVisitor);
+			}
+		}
+		if (f.change == ChangeKind.DELETED){
+			remove(files, f.name);
+		}
+		else {
+			files[f.name] = f;
+		}
+		stop;
+	}
+});
+

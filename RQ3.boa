@@ -1,0 +1,69 @@
+# How often do developers introduce new classes/methods/fields/variables to fix bugs?
+
+p: Project = input;
+count: output sum[string] of int;
+revCount: output sum of int;
+
+isFixing := false;
+files: map[string] of ChangedFile;
+
+plusVisitor := visitor {
+	before s: Statement -> {
+		if (def(s.variable_declaration)) {
+			count["var_decl"] << 1;
+		}
+	}
+	before decl: Declaration -> {
+		if (decl.kind == TypeKind.CLASS) {
+			count["class_decl"] << 1;
+			count["mtd_decl"] << len(decl.methods);
+			count["fld_decl"] << len(decl.fields);
+		}
+	}
+};
+
+minusVisitor := visitor {
+	before s: Statement -> {
+		if (def(s.variable_declaration)) {
+			count["var_decl"] << -1;
+		}
+	}
+	before decl: Declaration -> {
+		if (decl.kind == TypeKind.CLASS) {
+			count["class_decl"] << -1;
+			count["mtd_decl"] << -len(decl.methods);
+			count["fld_decl"] << -len(decl.fields);
+		}
+	}
+};
+
+visit(p, visitor{
+	before r: Revision -> {
+		isFixing = isfixingrevision(r.log);
+		if (isFixing) {
+			revCount << 1;
+		}
+	}
+	before f: ChangedFile -> {
+		if (isFixing) {
+			if (f.change == ChangeKind.ADDED) {
+				visit(getast(f), plusVisitor);
+			}
+			else if (f.change == ChangeKind.MODIFIED && haskey(files, f.name)) {
+				visit(getast(files[f.name]), minusVisitor);
+				visit(getast(f), plusVisitor);
+			}
+			else {
+				visit(getast(f), minusVisitor);
+			}
+		}
+		if (f.change == ChangeKind.DELETED){
+			remove(files, f.name);
+		}
+		else {
+			files[f.name] = f;
+		}
+		stop;
+	}
+});
+

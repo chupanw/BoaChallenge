@@ -1,0 +1,28 @@
+# What are the file types of those changed files?
+
+p: Project = input;
+types: output sum[string] of int;
+revCount: output sum of int;
+
+isFixing := false;
+
+visit(p, visitor{
+	before r: Revision -> {
+		isFixing = isfixingrevision(r.log);
+		if (isFixing){
+			revCount << 1;
+		}
+	}
+	before f: ChangedFile -> {
+		if (isFixing){
+			if (f.kind == FileKind.BINARY) types["BINARY"] << 1;
+			else if (f.kind == FileKind.SOURCE_JAVA_ERROR) types["SOURCE_JAVA_ERROR"] << 1;
+			else if (f.kind == FileKind.SOURCE_JAVA_JLS2) types["SOURCE_JAVA_JLS2"] << 1;
+			else if (f.kind == FileKind.SOURCE_JAVA_JLS3) types["SOURCE_JAVA_JLS3"] << 1;
+			else if (f.kind == FileKind.SOURCE_JAVA_JLS4) types["SOURCE_JAVA_JLS4"] << 1;
+			else if (f.kind == FileKind.TEXT) types["TEXT"] << 1;
+			else if (f.kind == FileKind.XML) types["XML"] << 1;
+			else types["UNKNOWN"] << 1;
+		}
+	}
+});
