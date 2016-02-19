@@ -1,0 +1,116 @@
+AmountOfFilesThatReplacedStmt: output sum[string][string] of int;
+
+firstKinds := {
+    string(StatementKind.LABEL),
+    string(StatementKind.LABEL),
+    string(StatementKind.LABEL),
+    string(StatementKind.LABEL),
+    string(StatementKind.LABEL),
+    string(StatementKind.LABEL),
+    string(StatementKind.LABEL),
+    string(StatementKind.LABEL)
+};
+secondKinds := {
+    string(StatementKind.SWITCH),
+    string(StatementKind.SYNCHRONIZED),
+    string(StatementKind.THROW),
+    string(StatementKind.TRY),
+    string(StatementKind.CASE),
+    string(StatementKind.RETURN),
+    string(StatementKind.WHILE),
+    string(StatementKind.TYPEDECL)
+};
+
+isfixing := false;
+
+previousFirstStmtKindCount: map[string] of int;
+previousSecondStmtKindCount: map[string] of int;
+firstStmtKindCount: map[string] of int;
+secondStmtKindCount: map[string] of int;
+
+# map of file names to the last revision of that file
+files: map[string] of ChangedFile;
+
+findChanges := function(kind: string, kind2: string) {
+    firstStmtKindCount1 := lookup(firstStmtKindCount, kind, 0);
+    previousFirstStmtKindCount1 := lookup(previousFirstStmtKindCount, kind, 0);
+    secondStmtKindCount1 := lookup(secondStmtKindCount, kind2, 0);
+    previousSecondStmtKindCount1 := lookup(previousSecondStmtKindCount, kind2, 0);
+
+	addedFirstStmtKind := false;
+	addedSecondStmtKind:= false;
+	deletedFirstStmtKind := false;
+	deletedSecondStmtKind:= false;
+
+	# if there are more of the first kind of stmt than before
+	if (firstStmtKindCount1 > previousFirstStmtKindCount1)
+		addedFirstStmtKind = true;
+
+	# if there are more of the second kind of stmt than before
+	if (secondStmtKindCount1 > previousSecondStmtKindCount1)
+		addedSecondStmtKind = true;
+
+	# if there are less of the first kind of stmt than before
+	if (firstStmtKindCount1 < previousFirstStmtKindCount1)
+		deletedFirstStmtKind = true;
+
+	# if there are less of the second kind of stmt than before
+	if (secondStmtKindCount1 < previousSecondStmtKindCount1)
+		deletedSecondStmtKind = true;
+
+	# Replaced 1st for 2nd kind of stmt
+	if (deletedFirstStmtKind && addedSecondStmtKind)
+	    AmountOfFilesThatReplacedStmt[kind][kind2] << 1;
+
+	# Replaced 2nd for 1st kind of stmt
+	if (addedFirstStmtKind && deletedSecondStmtKind)
+	    AmountOfFilesThatReplacedStmt[kind2][kind] << 1;
+};
+
+i := 0;
+
+visit(input, visitor {
+	before node: Revision -> isfixing = isfixingrevision(node.log);
+	before node: ChangedFile -> {
+		# if this is a fixing revision and
+		# there was a previous version of the file
+		if (isfixing && haskey(files, node.name)) {
+		    oldAst := getast(files[node.name]);
+		    ast := getast(node);
+
+            for (k := 0; k < len(firstKinds); k++) {
+                i = k;
+
+                kind1 := firstKinds[i];
+                kind2 := secondKinds[i];
+    			# count how many stmts were previously in the file
+    			firstStmtKindCount[kind1] = 0 ;
+    			secondStmtKindCount[kind2] = 0;
+    			visit(oldAst);
+                previousFirstStmtKindCount[kind1] = firstStmtKindCount[kind1];
+                previousSecondStmtKindCount[kind2] = secondStmtKindCount[kind2];
+
+    			# count how many stmts are currently in the file
+    			firstStmtKindCount[kind1] = 0 ;
+    			secondStmtKindCount[kind2] = 0;
+    			visit(ast);
+            }
+
+            for (j := 0; j < len(firstKinds); j++)
+                findChanges(firstKinds[j], secondKinds[j]);
+
+		}
+		if (node.change == ChangeKind.DELETED)
+			remove(files, node.name);
+		else
+			files[node.name] = node;
+		stop;
+	}
+	before node: Statement ->
+		# increase the counter if there is one of the first kind of statement
+		if (firstKinds[i] == string(node.kind))
+			firstStmtKindCount[string(node.kind)] = 1 + lookup(firstStmtKindCount, string(node.kind), 0);
+        # increase the counter if there is one of the second kind of statement
+		else if (secondKinds[i] == string(node.kind))
+			secondStmtKindCount[string(node.kind)] = 1 + lookup(secondStmtKindCount, string(node.kind), 0);
+});

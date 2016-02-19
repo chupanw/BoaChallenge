@@ -1,0 +1,112 @@
+p: Project = input;
+isfixing := false;
+# map of file names to the last revision of that file
+files: map[string] of ChangedFile;
+Methods : map[string] of int;
+NewMethods : map[string] of int;
+arrMethod : array of string;
+prefile:= true;
+count: output sum of int;
+count1: output sum of int;
+count2: output sum of int;
+countAll: output sum of int;
+
+visit(p, visitor {
+	before node: Revision -> isfixing = isfixingrevision(node.log);
+	before node: ChangedFile -> {
+		# if this is a fixing revision and
+		# there was a previous version of the file
+		if (isfixing && haskey(files, node.name)) {
+		    clear(Methods);
+		    clear(NewMethods);
+			# process previous file
+			prefile = true;
+			visit(getast(files[node.name]));
+
+			# process current file
+			prefile = false;
+			visit(getast(node));
+            prevMethods := keys(Methods);
+            newMethods := keys(NewMethods);
+            found:=false;
+            found1:=false;
+            found2:=false;
+            foreach(i: int; prevMethods[i]){
+                method := splitall(prevMethods[i],"\\(");
+                foreach(j: int; newMethods[j]){
+                    newmethod := splitall(newMethods[j],"\\(");
+                    if (method[0]==newmethod[0]){
+                        params:=splitall(method[1],";");
+                        newParams:=splitall(newmethod[1],";");
+                        lenParams:=len(params);
+                        lenNewParams:=len(newParams);
+                        if (lenParams>1 && lenParams==lenNewParams && !found){
+                            count << 1;
+                            found=true;
+                            if (found1 && found2)
+                                break;
+                        }
+                        if (lenParams+1==lenNewParams && !found1){
+                            count1 << 1;
+                            found1=true;
+                            if (found && found2)
+                                break;
+                        }
+                    }else if (method[1]==newmethod[1] && !found2){
+                        count2 << 1;
+                        found2=true;
+                    }
+                }
+                if(found && found1 && found2){
+                    break;
+                }
+            }
+            countAll << 1;
+		}
+		if (node.change == ChangeKind.DELETED)
+			remove(files, node.name);
+		else
+			files[node.name] = node;
+		stop;
+	}
+	before node: Expression ->
+		if (node.kind == ExpressionKind.METHODCALL){
+		    tempStr := "(";
+		    foreach (i: int; node.method_args[i]){
+		        if (node.method_args[i].kind == ExpressionKind.LITERAL){
+                    tempStr = tempStr + node.method_args[i].literal + ";";
+		        }else if (node.method_args[i].kind == ExpressionKind.VARACCESS){
+                    tempStr = tempStr + node.method_args[i].variable + ";";
+		        }else{
+		            tempStr = tempStr + "OTHER;";
+		        }
+		    }
+		    tempStr = tempStr + ")";
+		    MethodSignature := node.method+tempStr;
+		    if (prefile){
+		        if(haskey(Methods,MethodSignature)){
+		            Methods[MethodSignature]=Methods[MethodSignature]+1;
+		        }else{
+		            Methods[MethodSignature]=1;
+		        }
+		    }
+		    else{
+    		    if(haskey(Methods,MethodSignature)){
+    		        tempInt := Methods[MethodSignature];
+    		        tempInt--;
+		            Methods[MethodSignature]=tempInt;
+		            if (Methods[MethodSignature]==0){
+		                remove(Methods,MethodSignature);
+		            }
+    		    }else{
+    		        if(haskey(NewMethods,MethodSignature)){
+    		            NewMethods[MethodSignature]=NewMethods[MethodSignature]+1;
+    		        }else{
+    		            NewMethods[MethodSignature]=1;
+    		        }
+    		    }
+		    }
+		    
+		}
+		    
+});

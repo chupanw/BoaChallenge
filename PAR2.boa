@@ -1,0 +1,105 @@
+p: Project = input;
+AddedNullCheck: output sum of int;
+AddedBoundCheck: output sum of int;
+AddedCastCheck: output sum of int;
+AddedInitCheck: output sum of int;
+AddedRemovedIfCondCheck: output sum of int;
+AddedColBoundCheck: output sum of int;
+Output: output collection of string;
+
+isfixing := false;
+count := 0;
+count1 := 0;
+count2 := 0;
+count3 := 0;
+count4 := 0;
+count5 := 0;
+
+# map of file names to the last revision of that file
+files: map[string] of ChangedFile;
+
+visit(p, visitor {
+	before node: Revision -> isfixing = isfixingrevision(node.log);
+	before node: ChangedFile -> {
+		# if this is a fixing revision and
+		# there was a previous version of the file
+		if (isfixing && haskey(files, node.name)) {
+			# count how many null checks were previously in the file
+			count = 0;
+			count1 = 0;
+			count2 = 0;
+			count3 = 0;
+			count4 = 0;
+			count5 = 0;
+			visit(getast(files[node.name]));
+			last := count;
+			last1 := count1;
+			last2 := count2;
+			last3 := count3;
+			last4 := count4;
+			last5 := count5;
+
+			# count how many null checks are currently in the file
+			count = 0;
+			count1 = 0;
+			count2 = 0;
+			count3 = 0;
+			count4 = 0;
+			count5 = 0;
+			visit(getast(node));
+
+			# if there are more null checks, output
+			if (count > last)
+				AddedNullCheck << 1;
+			if (count1 > last1)
+			    AddedBoundCheck << 1;
+			if (count2 > last2)
+			    AddedCastCheck << 1;
+			if (count3 > last3)
+			    AddedInitCheck << 1;
+			if (count4 != last4)
+			    AddedRemovedIfCondCheck << 1;
+			if (count5 != last5)
+			    AddedColBoundCheck << 1;
+		}
+		if (node.change == ChangeKind.DELETED)
+			remove(files, node.name);
+		else
+			files[node.name] = node;
+		stop;
+	}
+	before node: Statement ->
+		# increase the counter if there is an IF statement
+		# where the boolean condition is of the form:
+		#	null == expr OR expr == null OR null != expr OR expr != null
+		if (node.kind == StatementKind.IF)
+			visit(node.expression, visitor {
+				before node: Expression ->
+					if (node.kind == ExpressionKind.EQ || node.kind == ExpressionKind.NEQ)
+						exists (i: int; isliteral(node.expressions[i], "null"))
+							count++;
+					else if (node.kind == ExpressionKind.LT || node.kind == ExpressionKind.GT){
+					    loc:=strrfind(".length",node.expressions[1].variable);
+					    loc1:=strrfind(".length",node.expressions[0].variable);
+					    if((loc!=-1 && loc+7==len(node.expressions[1].variable)) || (loc1!=-1 && loc1+7==len(node.expressions[0].variable)))
+					        count1++;
+					    if(node.expressions[0].method=="size" && len(node.method_args)==0 && node.kind == ExpressionKind.GT)
+							count5++;
+						else if(node.expressions[1].method=="size" && len(node.method_args)==0 && node.kind == ExpressionKind.LT)
+						    count5++;
+					}else if (node.kind == ExpressionKind.LOGICAL_AND || node.kind == ExpressionKind.LOGICAL_OR){
+					    count4++;
+					}
+			});
+    before node: Expression ->
+        if(node.kind == ExpressionKind.CAST){
+            count2++;
+        }else if (node.kind == ExpressionKind.VARDECL){
+            visit(node, visitor {
+				before node: Expression ->
+					if (node.kind == ExpressionKind.NEW){
+					    count3++;
+					}
+			});
+        }
+});
