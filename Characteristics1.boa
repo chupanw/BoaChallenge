@@ -5,6 +5,8 @@ p: Project = input;
 fileCount: output sum of int;
 # total number of revisions
 revCount: output sum of int;
+# collect all the numbers and calculate median (locally)
+fileCountCollection: output collection of int;
 
 # other variables
 isfixing := false;
@@ -14,6 +16,7 @@ visit(p, visitor{
 		isfixing = isfixingrevision(r.log);
 		if (isfixing) {
 			fileCount << len(r.files);
+			fileCountCollection << len(r.files);
 			revCount << 1;
 		}
 	}
